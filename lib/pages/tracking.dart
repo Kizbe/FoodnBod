@@ -36,8 +36,13 @@ class _TrackingPageState extends State<TrackingPage> {
   @override
   void initState() {
     super.initState();
-    final provider = Provider.of<FitnessProvider>(context, listen: false);
-    _searchResults = provider.activeSearchType == 'food' ? _defaultFoods : _defaultWorkouts;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final provider = Provider.of<FitnessProvider>(context, listen: false);
+      setState(() {
+        _searchResults = provider.activeSearchType == 'food' ? _defaultFoods : _defaultWorkouts;
+      });
+    });
   }
 
   void _performSearch() {
@@ -49,6 +54,7 @@ class _TrackingPageState extends State<TrackingPage> {
     });
 
     Future.delayed(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
       setState(() {
         if (provider.activeSearchType == 'food') {
           _searchResults = _defaultFoods.where((item) => 
@@ -91,6 +97,72 @@ class _TrackingPageState extends State<TrackingPage> {
         );
       }
     }
+  }
+
+  void _showAddWorkoutDialog(BuildContext context, FitnessProvider fitness, Map<String, dynamic> item) {
+    final setsController = TextEditingController(text: '3');
+    final repsController = TextEditingController(text: '10');
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Add ${item['name']}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Set default performance for this exercise:'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: setsController,
+              decoration: const InputDecoration(labelText: 'Sets', border: OutlineInputBorder()),
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: repsController,
+              decoration: const InputDecoration(labelText: 'Reps', border: OutlineInputBorder()),
+              keyboardType: TextInputType.number,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              final sets = int.tryParse(setsController.text) ?? 3;
+              final reps = int.tryParse(repsController.text) ?? 10;
+              
+              // 1. Log to today's activity immediately
+              fitness.addActivity(Activity(
+                id: DateTime.now().toString(),
+                name: item['name'],
+                sets: sets,
+                reps: reps,
+                duration: const Duration(minutes: 30),
+                timestamp: DateTime.now(),
+              ));
+
+              // 2. Function as SAVE: add to library with these defaults
+              fitness.saveWorkout(SavedWorkout(
+                id: DateTime.now().toString() + "_saved",
+                name: item['name'],
+                instructions: item['instructions'],
+                muscle: item['muscle'],
+                difficulty: item['difficulty'],
+                defaultSets: sets,
+                defaultReps: reps,
+              ));
+              
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Added and Saved ${item['name']}!')),
+              );
+            },
+            child: const Text('Add & Save'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -182,40 +254,9 @@ class _TrackingPageState extends State<TrackingPage> {
                         return ListTile(
                           title: Text(item['name'].toString().toUpperCase()),
                           subtitle: Text('${item['muscle']} | ${item['difficulty']}'),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.bookmark_border, color: Colors.amber),
-                                onPressed: () {
-                                  fitness.saveWorkout(SavedWorkout(
-                                    id: DateTime.now().toString(),
-                                    name: item['name'],
-                                    instructions: item['instructions'],
-                                    muscle: item['muscle'],
-                                    difficulty: item['difficulty'],
-                                  ));
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Saved ${item['name']}')),
-                                  );
-                                },
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.add, color: Colors.blue),
-                                onPressed: () {
-                                  fitness.addActivity(Activity(
-                                    id: DateTime.now().toString(),
-                                    name: item['name'],
-                                    caloriesBurned: 150, 
-                                    duration: const Duration(minutes: 30),
-                                    timestamp: DateTime.now(),
-                                  ));
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Logged ${item['name']}')),
-                                  );
-                                },
-                              ),
-                            ],
+                          trailing: IconButton(
+                            icon: const Icon(Icons.add, color: Colors.blue),
+                            onPressed: () => _showAddWorkoutDialog(context, fitness, item),
                           ),
                         );
                       }

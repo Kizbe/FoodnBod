@@ -1,16 +1,105 @@
 import 'package:flutter/material.dart';
 
+class UserProfile {
+  final String name;
+  final double height; // in cm
+  final double weight; // in kg
+  final int age;
+  final String gender;
+  final String activityLevel;
+  final List<String> allergies;
+  final bool onboardingCompleted;
+  final bool notificationsEnabled;
+
+  UserProfile({
+    required this.name,
+    required this.height,
+    required this.weight,
+    required this.age,
+    required this.gender,
+    required this.activityLevel,
+    required this.allergies,
+    this.onboardingCompleted = false,
+    this.notificationsEnabled = false,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'name': name,
+      'height': height,
+      'weight': weight,
+      'age': age,
+      'gender': gender,
+      'activityLevel': activityLevel,
+      'allergies': allergies,
+      'onboardingCompleted': onboardingCompleted,
+      'notificationsEnabled': notificationsEnabled,
+    };
+  }
+
+  factory UserProfile.fromMap(Map<String, dynamic> map) {
+    return UserProfile(
+      name: map['name'] ?? '',
+      height: (map['height'] ?? 0.0).toDouble(),
+      weight: (map['weight'] ?? 0.0).toDouble(),
+      age: map['age'] ?? 0,
+      gender: map['gender'] ?? '',
+      activityLevel: map['activityLevel'] ?? '',
+      allergies: List<String>.from(map['allergies'] ?? []),
+      onboardingCompleted: map['onboardingCompleted'] ?? false,
+      notificationsEnabled: map['notificationsEnabled'] ?? false,
+    );
+  }
+
+  factory UserProfile.empty() {
+    return UserProfile(
+      name: '',
+      height: 0.0,
+      weight: 0.0,
+      age: 0,
+      gender: '',
+      activityLevel: '',
+      allergies: [],
+      onboardingCompleted: false,
+      notificationsEnabled: false,
+    );
+  }
+}
+
+class DailyStepCount {
+  final DateTime date;
+  final int steps;
+
+  DailyStepCount({required this.date, required this.steps});
+
+  Map<String, dynamic> toMap() {
+    return {
+      'date': date.toIso8601String(),
+      'steps': steps,
+    };
+  }
+
+  factory DailyStepCount.fromMap(Map<String, dynamic> map) {
+    return DailyStepCount(
+      date: DateTime.parse(map['date']),
+      steps: map['steps'],
+    );
+  }
+}
+
 class Activity {
   final String id;
   final String name;
-  final int caloriesBurned;
+  final int? sets;
+  final int? reps;
   final Duration duration;
   final DateTime timestamp;
 
   Activity({
     required this.id,
     required this.name,
-    required this.caloriesBurned,
+    this.sets,
+    this.reps,
     required this.duration,
     required this.timestamp,
   });
@@ -19,7 +108,8 @@ class Activity {
     return {
       'id': id,
       'name': name,
-      'caloriesBurned': caloriesBurned,
+      'sets': sets,
+      'reps': reps,
       'duration': duration.inMinutes,
       'timestamp': timestamp.toIso8601String(),
     };
@@ -29,7 +119,8 @@ class Activity {
     return Activity(
       id: map['id'],
       name: map['name'],
-      caloriesBurned: map['caloriesBurned'],
+      sets: map['sets'],
+      reps: map['reps'],
       duration: Duration(minutes: map['duration']),
       timestamp: DateTime.parse(map['timestamp']),
     );
@@ -42,6 +133,8 @@ class SavedWorkout {
   final String? instructions;
   final String? muscle;
   final String? difficulty;
+  final int? defaultSets;
+  final int? defaultReps;
   DateTime? scheduledTime;
 
   SavedWorkout({
@@ -50,6 +143,8 @@ class SavedWorkout {
     this.instructions,
     this.muscle,
     this.difficulty,
+    this.defaultSets,
+    this.defaultReps,
     this.scheduledTime,
   });
 
@@ -60,6 +155,8 @@ class SavedWorkout {
       'instructions': instructions,
       'muscle': muscle,
       'difficulty': difficulty,
+      'defaultSets': defaultSets,
+      'defaultReps': defaultReps,
       'scheduledTime': scheduledTime?.toIso8601String(),
     };
   }
@@ -71,6 +168,8 @@ class SavedWorkout {
       instructions: map['instructions'],
       muscle: map['muscle'],
       difficulty: map['difficulty'],
+      defaultSets: map['defaultSets'],
+      defaultReps: map['defaultReps'],
       scheduledTime: map['scheduledTime'] != null ? DateTime.parse(map['scheduledTime']) : null,
     );
   }

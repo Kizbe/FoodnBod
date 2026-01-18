@@ -65,7 +65,6 @@ class SavedWorkoutsPage extends StatelessWidget {
                                   fitness.addActivity(Activity(
                                     id: DateTime.now().toString(),
                                     name: workout.name,
-                                    caloriesBurned: 150,
                                     duration: const Duration(minutes: 30),
                                     timestamp: DateTime.now(),
                                   ));

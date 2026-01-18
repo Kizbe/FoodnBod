@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/fitness_provider.dart';
 import 'main_screen.dart';
+import 'pages/onboarding.dart';
 
 void main() {
   runApp(
@@ -39,7 +40,9 @@ class MyApp extends StatelessWidget {
             ),
             useMaterial3: true,
           ),
-          home: const MainScreen(),
+          home: fitness.userProfile.onboardingCompleted 
+              ? const MainScreen() 
+              : const OnboardingPage(),
         );
       },
     );

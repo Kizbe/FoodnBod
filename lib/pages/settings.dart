@@ -1,9 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/fitness_provider.dart';
+import '../models/fitness_data.dart';
+import 'profile.dart';
+import 'legal.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
+
+  void _showDeleteConfirmation(BuildContext context, FitnessProvider fitness) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete All Data?'),
+        content: const Text(
+          'This action cannot be undone. All your profile info, workouts, meals, and history will be permanently removed.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              fitness.clearAllData();
+              Navigator.pop(context); // Close dialog
+              Navigator.pop(context); // Exit settings
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('All data has been cleared.')),
+              );
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            child: const Text('Delete Everything'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -11,6 +44,8 @@ class SettingsPage extends StatelessWidget {
       appBar: AppBar(title: const Text('Settings')),
       body: Consumer<FitnessProvider>(
         builder: (context, fitness, child) {
+          final profile = fitness.userProfile;
+          
           return ListView(
             padding: const EdgeInsets.symmetric(vertical: 8),
             children: [
@@ -29,7 +64,11 @@ class SettingsPage extends StatelessWidget {
               const Divider(),
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Text('Theme Color', style: TextStyle(fontWeight: FontWeight.bold)),
+                child: Text('Appearance', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: Text('Theme Color', style: TextStyle(fontSize: 12, color: Colors.grey)),
               ),
               SizedBox(
                 height: 80,
@@ -68,15 +107,85 @@ class SettingsPage extends StatelessWidget {
                 ),
               ),
               const Divider(),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text('Account & Preferences', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
               ListTile(
                 leading: const Icon(Icons.person_outline),
                 title: const Text('Profile'),
-                onTap: () {},
+                subtitle: Text(profile.name.isEmpty ? 'Set up your profile' : 'Edit height, weight, allergies'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const ProfilePage()),
+                  );
+                },
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.notifications_none),
+                title: const Text('Notifications'),
+                subtitle: const Text('Receive reminders for activities'),
+                value: profile.notificationsEnabled,
+                onChanged: (bool value) {
+                  final updatedProfile = UserProfile(
+                    name: profile.name,
+                    height: profile.height,
+                    weight: profile.weight,
+                    age: profile.age,
+                    gender: profile.gender,
+                    activityLevel: profile.activityLevel,
+                    allergies: profile.allergies,
+                    onboardingCompleted: profile.onboardingCompleted,
+                    notificationsEnabled: value,
+                  );
+                  fitness.setUserProfile(updatedProfile);
+                },
+              ),
+              const Divider(),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text('Legal', style: TextStyle(fontWeight: FontWeight.bold)),
               ),
               ListTile(
-                leading: const Icon(Icons.notifications_none),
-                title: const Text('Notifications'),
-                onTap: () {},
+                leading: const Icon(Icons.description_outlined),
+                title: const Text('Terms of Service'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const LegalPage(
+                        title: 'Terms of Service',
+                        content: LegalTexts.termsOfService,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.privacy_tip_outlined),
+                title: const Text('Privacy Policy'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const LegalPage(
+                        title: 'Privacy Policy',
+                        content: LegalTexts.privacyPolicy,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.delete_forever, color: Colors.red),
+                title: const Text('Reset App Data', style: TextStyle(color: Colors.red)),
+                subtitle: const Text('Permanently delete all your information'),
+                onTap: () => _showDeleteConfirmation(context, fitness),
               ),
             ],
           );

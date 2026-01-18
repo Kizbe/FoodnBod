@@ -4,11 +4,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/fitness_data.dart';
 
 class FitnessProvider with ChangeNotifier {
+  UserProfile _userProfile = UserProfile.empty();
   List<Activity> _activities = [];
   List<Meal> _meals = [];
   List<SavedWorkout> _savedWorkouts = [];
   List<WorkoutPreset> _workoutPresets = [];
   List<MealPreset> _mealPresets = [];
+  List<DailyStepCount> _stepHistory = [];
   
   List<MealTime> _mealTimes = [
     MealTime(name: 'Breakfast', time: const TimeOfDay(hour: 8, minute: 0)),
@@ -17,6 +19,7 @@ class FitnessProvider with ChangeNotifier {
   ];
 
   int _steps = 0;
+  DateTime _lastStepUpdate = DateTime.now();
   int _stepGoal = 10000;
   bool _isDarkMode = false;
   Color _seedColor = Colors.green;
@@ -40,6 +43,7 @@ class FitnessProvider with ChangeNotifier {
     _loadFromPrefs();
   }
 
+  UserProfile get userProfile => _userProfile;
   List<Activity> get activities => [..._activities];
   List<Meal> get meals => [..._meals];
   List<SavedWorkout> get savedWorkouts => [..._savedWorkouts];
@@ -51,6 +55,35 @@ class FitnessProvider with ChangeNotifier {
   List<Color> get availableColors => _availableColors;
   int get currentTab => _currentTab;
   String get activeSearchType => _activeSearchType;
+
+  // --- Profile ---
+  void setUserProfile(UserProfile profile) {
+    _userProfile = profile;
+    _saveToPrefs();
+    notifyListeners();
+  }
+
+  // --- Data Reset ---
+  Future<void> clearAllData() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+    
+    // Reset local state to defaults
+    _userProfile = UserProfile.empty();
+    _activities = [];
+    _meals = [];
+    _savedWorkouts = [];
+    _workoutPresets = [];
+    _mealPresets = [];
+    _stepHistory = [];
+    _steps = 0;
+    _currentTab = 0;
+    _activeSearchType = 'food';
+    _isDarkMode = false;
+    _seedColor = Colors.green;
+    
+    notifyListeners();
+  }
 
   // --- Navigation ---
   void setTab(int index) {
@@ -89,6 +122,12 @@ class FitnessProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  void removeMeal(String id) {
+    _meals.removeWhere((m) => m.id == id);
+    _saveToPrefs();
+    notifyListeners();
+  }
+
   void addMealPreset(MealPreset preset) {
     if (!_mealPresets.any((m) => m.name == preset.name)) {
       _mealPresets.add(preset);
@@ -122,6 +161,12 @@ class FitnessProvider with ChangeNotifier {
   // --- Activities ---
   void addActivity(Activity activity) {
     _activities.add(activity);
+    _saveToPrefs();
+    notifyListeners();
+  }
+
+  void removeActivity(String id) {
+    _activities.removeWhere((a) => a.id == id);
     _saveToPrefs();
     notifyListeners();
   }
@@ -200,7 +245,20 @@ class FitnessProvider with ChangeNotifier {
 
   // --- Steps ---
   void updateSteps(int newSteps) {
+    final now = DateTime.now();
+    
+    if (now.day != _lastStepUpdate.day || now.month != _lastStepUpdate.month || now.year != _lastStepUpdate.year) {
+      _stepHistory.removeWhere((s) => 
+        s.date.year == _lastStepUpdate.year && 
+        s.date.month == _lastStepUpdate.month && 
+        s.date.day == _lastStepUpdate.day
+      );
+      _stepHistory.add(DailyStepCount(date: _lastStepUpdate, steps: _steps));
+      _steps = 0; 
+    }
+    
     _steps = newSteps;
+    _lastStepUpdate = now;
     _saveToPrefs();
     notifyListeners();
   }
@@ -214,13 +272,16 @@ class FitnessProvider with ChangeNotifier {
   // --- Persistence ---
   Future<void> _saveToPrefs() async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('userProfile', jsonEncode(_userProfile.toMap()));
     await prefs.setString('activities', jsonEncode(_activities.map((a) => a.toMap()).toList()));
     await prefs.setString('meals', jsonEncode(_meals.map((m) => m.toMap()).toList()));
     await prefs.setString('savedWorkouts', jsonEncode(_savedWorkouts.map((w) => w.toMap()).toList()));
     await prefs.setString('workoutPresets', jsonEncode(_workoutPresets.map((p) => p.toMap()).toList()));
     await prefs.setString('mealPresets', jsonEncode(_mealPresets.map((m) => m.toMap()).toList()));
     await prefs.setString('mealTimes', jsonEncode(_mealTimes.map((t) => t.toMap()).toList()));
+    await prefs.setString('stepHistory', jsonEncode(_stepHistory.map((s) => s.toMap()).toList()));
     await prefs.setInt('steps', _steps);
+    await prefs.setString('lastStepUpdate', _lastStepUpdate.toIso8601String());
     await prefs.setInt('stepGoal', _stepGoal);
     await prefs.setBool('isDarkMode', _isDarkMode);
     await prefs.setInt('seedColor', _seedColor.value);
@@ -229,6 +290,11 @@ class FitnessProvider with ChangeNotifier {
   Future<void> _loadFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     
+    final profJson = prefs.getString('userProfile');
+    if (profJson != null) {
+      _userProfile = UserProfile.fromMap(jsonDecode(profJson));
+    }
+
     final actJson = prefs.getString('activities');
     if (actJson != null) {
       _activities = (jsonDecode(actJson) as List).map((i) => Activity.fromMap(i)).toList();
@@ -259,7 +325,14 @@ class FitnessProvider with ChangeNotifier {
       _mealTimes = (jsonDecode(timesJson) as List).map((i) => MealTime.fromMap(i)).toList();
     }
 
+    final historyJson = prefs.getString('stepHistory');
+    if (historyJson != null) {
+      _stepHistory = (jsonDecode(historyJson) as List).map((i) => DailyStepCount.fromMap(i)).toList();
+    }
+
     _steps = prefs.getInt('steps') ?? 0;
+    final lastUpdateStr = prefs.getString('lastStepUpdate');
+    if (lastUpdateStr != null) _lastStepUpdate = DateTime.parse(lastUpdateStr);
     _stepGoal = prefs.getInt('stepGoal') ?? 10000;
     _isDarkMode = prefs.getBool('isDarkMode') ?? false;
     final colorVal = prefs.getInt('seedColor');
@@ -282,24 +355,29 @@ class FitnessProvider with ChangeNotifier {
     
     return [...activityItems, ...mealItems]..sort((a, b) => b.timestamp.compareTo(a.timestamp));
   }
+
+  int getStepsForDate(DateTime date) {
+    final now = DateTime.now();
+    if (date.year == now.year && date.month == now.month && date.day == now.day) {
+      return _steps;
+    }
+    final history = _stepHistory.firstWhere(
+      (s) => s.date.year == date.year && s.date.month == date.month && s.date.day == date.day,
+      orElse: () => DailyStepCount(date: date, steps: 0)
+    );
+    return history.steps;
+  }
   
   List<dynamic> get upcomingWorkouts {
     final now = DateTime.now();
-    
     final List<dynamic> scheduled = [];
-    
-    // Add scheduled individual workouts
     scheduled.addAll(_savedWorkouts.where((w) => w.scheduledTime != null && w.scheduledTime!.isAfter(now)));
-    
-    // Add scheduled workout routines
     scheduled.addAll(_workoutPresets.where((p) => p.scheduledTime != null && p.scheduledTime!.isAfter(now)));
-    
     scheduled.sort((a, b) {
       final timeA = a is SavedWorkout ? a.scheduledTime! : (a as WorkoutPreset).scheduledTime!;
       final timeB = b is SavedWorkout ? b.scheduledTime! : (b as WorkoutPreset).scheduledTime!;
       return timeA.compareTo(timeB);
     });
-    
     return scheduled;
   }
 
@@ -308,11 +386,7 @@ class FitnessProvider with ChangeNotifier {
   int get caloriesFromSteps => (_steps * _caloriesPerStep).round();
 
   int get totalCaloriesBurned {
-    final now = DateTime.now();
-    int activityCalories = _activities
-        .where((a) => a.timestamp.year == now.year && a.timestamp.month == now.month && a.timestamp.day == now.day)
-        .fold(0, (sum, item) => sum + item.caloriesBurned);
-    return activityCalories + caloriesFromSteps;
+    return caloriesFromSteps;
   }
 
   int get totalCaloriesConsumed {

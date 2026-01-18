@@ -101,7 +101,7 @@ class _HomePageState extends State<HomePage> {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             _buildStatColumn('Consumed', '${fitness.totalCaloriesConsumed}', colorScheme.primary),
-            _buildStatColumn('Burned', '${fitness.totalCaloriesBurned}', Colors.red),
+            _buildStatColumn('Steps', '${fitness.caloriesFromSteps}', Colors.red),
             _buildStatColumn('Net', '${fitness.netCalories}', colorScheme.secondary),
           ],
         ),
@@ -190,21 +190,7 @@ class _HomePageState extends State<HomePage> {
                           ),
                           IconButton(
                             icon: const Icon(Icons.check_circle_outline),
-                            onPressed: () {
-                              for (var ex in w.exercises) {
-                                fitness.addActivity(Activity(
-                                  id: DateTime.now().toString(),
-                                  name: ex.name,
-                                  caloriesBurned: 150,
-                                  duration: const Duration(minutes: 30),
-                                  timestamp: DateTime.now(),
-                                ));
-                              }
-                              fitness.clearScheduledRoutine(w.id);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Completed $name')),
-                              );
-                            },
+                            onPressed: () => _showLogWorkoutDialog(context, fitness, w),
                           ),
                         ],
                       ),
@@ -230,19 +216,7 @@ class _HomePageState extends State<HomePage> {
                           ),
                           IconButton(
                             icon: const Icon(Icons.check_circle_outline),
-                            onPressed: () {
-                              fitness.addActivity(Activity(
-                                id: DateTime.now().toString(),
-                                name: w.name,
-                                caloriesBurned: 150,
-                                duration: const Duration(minutes: 30),
-                                timestamp: DateTime.now(),
-                              ));
-                              fitness.clearScheduledWorkout(w.id);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Completed $name')),
-                              );
-                            },
+                            onPressed: () => _showLogWorkoutDialog(context, fitness, w),
                           ),
                         ],
                       ),
@@ -250,6 +224,94 @@ class _HomePageState extends State<HomePage> {
             );
           }),
       ],
+    );
+  }
+
+  void _showLogWorkoutDialog(BuildContext context, FitnessProvider fitness, dynamic workout) {
+    final bool isRoutine = workout is WorkoutPreset;
+    final List<SavedWorkout> exercises = isRoutine ? workout.exercises : [workout as SavedWorkout];
+    final Map<String, Map<String, TextEditingController>> controllers = {};
+
+    for (var ex in exercises) {
+      controllers[ex.id] = {
+        'sets': TextEditingController(text: '3'),
+        'reps': TextEditingController(text: '10'),
+      };
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Log ${isRoutine ? workout.name : (workout as SavedWorkout).name}'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: exercises.length,
+            itemBuilder: (context, index) {
+              final ex = exercises[index];
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(ex.name.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: controllers[ex.id]!['sets'],
+                            decoration: const InputDecoration(labelText: 'Sets'),
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: TextField(
+                            controller: controllers[ex.id]!['reps'],
+                            decoration: const InputDecoration(labelText: 'Reps'),
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              for (var ex in exercises) {
+                final sets = int.tryParse(controllers[ex.id]!['sets']!.text);
+                final reps = int.tryParse(controllers[ex.id]!['reps']!.text);
+                
+                fitness.addActivity(Activity(
+                  id: DateTime.now().toString(),
+                  name: ex.name,
+                  sets: sets,
+                  reps: reps,
+                  duration: const Duration(minutes: 30),
+                  timestamp: DateTime.now(),
+                ));
+              }
+              if (isRoutine) {
+                fitness.clearScheduledRoutine(workout.id);
+              } else {
+                fitness.clearScheduledWorkout((workout as SavedWorkout).id);
+              }
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Workout Logged!')),
+              );
+            },
+            child: const Text('Log Workout'),
+          ),
+        ],
+      ),
     );
   }
 

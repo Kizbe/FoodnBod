@@ -4,7 +4,6 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
 import '../providers/fitness_provider.dart';
 import '../models/fitness_data.dart';
-import '../main_screen.dart';
 
 class JournalPage extends StatefulWidget {
   const JournalPage({super.key});
@@ -62,6 +61,8 @@ class _JournalPageState extends State<JournalPage> with SingleTickerProviderStat
     return Consumer<FitnessProvider>(
       builder: (context, fitness, child) {
         final items = fitness.getItemsForDate(_selectedDay ?? _focusedDay);
+        final steps = fitness.getStepsForDate(_selectedDay ?? _focusedDay);
+        final stepCalories = (steps * 0.045).round();
 
         return Column(
           children: [
@@ -84,6 +85,23 @@ class _JournalPageState extends State<JournalPage> with SingleTickerProviderStat
               ),
             ),
             const Divider(),
+            if (steps > 0)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.directions_walk, color: Theme.of(context).colorScheme.primary, size: 20),
+                        const SizedBox(width: 8),
+                        Text('$steps Steps taken', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    Text('-$stepCalories kcal', style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
             Expanded(
               child: items.isEmpty
                   ? const Center(child: Text('No entries for this day'))
@@ -91,22 +109,43 @@ class _JournalPageState extends State<JournalPage> with SingleTickerProviderStat
                       itemCount: items.length,
                       itemBuilder: (context, index) {
                         final item = items[index];
-                        if (item is Activity) {
-                          return ListTile(
-                            leading: CircleAvatar(backgroundColor: Colors.blue, child: const Icon(Icons.fitness_center, color: Colors.white, size: 20)),
-                            title: Text(item.name.toUpperCase()),
-                            subtitle: Text(DateFormat('jm').format(item.timestamp)),
-                            trailing: Text('-${item.caloriesBurned} kcal', style: const TextStyle(color: Colors.red)),
-                          );
-                        } else if (item is Meal) {
-                          return ListTile(
-                            leading: CircleAvatar(backgroundColor: Colors.green, child: const Icon(Icons.restaurant, color: Colors.white, size: 20)),
-                            title: Text(item.name),
-                            subtitle: Text(DateFormat('jm').format(item.timestamp)),
-                            trailing: Text('+${item.calories} kcal', style: const TextStyle(color: Colors.green)),
-                          );
-                        }
-                        return const SizedBox.shrink();
+                        final String id = item is Activity ? item.id : (item as Meal).id;
+
+                        return Dismissible(
+                          key: Key(id),
+                          direction: DismissDirection.endToStart,
+                          background: Container(
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.only(right: 20),
+                            color: Colors.red,
+                            child: const Icon(Icons.delete, color: Colors.white),
+                          ),
+                          onDismissed: (direction) {
+                            if (item is Activity) {
+                              fitness.removeActivity(item.id);
+                            } else {
+                              fitness.removeMeal(item.id);
+                            }
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Deleted ${item is Activity ? item.name : (item as Meal).name}')),
+                            );
+                          },
+                          child: item is Activity
+                              ? ListTile(
+                                  leading: CircleAvatar(backgroundColor: Colors.blue, child: const Icon(Icons.fitness_center, color: Colors.white, size: 20)),
+                                  title: Text(item.name.toUpperCase()),
+                                  subtitle: Text(DateFormat('jm').format(item.timestamp)),
+                                  trailing: (item.sets != null && item.reps != null)
+                                      ? Text('${item.sets} x ${item.reps}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16))
+                                      : null,
+                                )
+                              : ListTile(
+                                  leading: CircleAvatar(backgroundColor: Colors.green, child: const Icon(Icons.restaurant, color: Colors.white, size: 20)),
+                                  title: Text((item as Meal).name),
+                                  subtitle: Text(DateFormat('jm').format(item.timestamp)),
+                                  trailing: Text('+${item.calories} kcal', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                                ),
+                        );
                       },
                     ),
             ),
@@ -133,7 +172,9 @@ class _JournalPageState extends State<JournalPage> with SingleTickerProviderStat
                   ...p.exercises.map((ex) => ListTile(
                     dense: true,
                     title: Text(ex.name),
-                    subtitle: Text(ex.muscle ?? 'General'),
+                    subtitle: (ex.defaultSets != null && ex.defaultReps != null)
+                        ? Text('${ex.muscle ?? 'General'} | ${ex.defaultSets}x${ex.defaultReps}')
+                        : Text(ex.muscle ?? 'General'),
                   )),
                   Padding(
                     padding: const EdgeInsets.all(8.0),
@@ -151,18 +192,7 @@ class _JournalPageState extends State<JournalPage> with SingleTickerProviderStat
                           label: const Text('Edit'),
                         ),
                         ElevatedButton.icon(
-                          onPressed: () {
-                            for (var ex in p.exercises) {
-                              fitness.addActivity(Activity(
-                                id: DateTime.now().toString(),
-                                name: ex.name,
-                                caloriesBurned: 150,
-                                duration: const Duration(minutes: 30),
-                                timestamp: DateTime.now(),
-                              ));
-                            }
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Logged routine: ${p.name}')));
-                          },
+                          onPressed: () => _showManualLogDialog(context, fitness, p),
                           icon: const Icon(Icons.add_task),
                           label: const Text('Log Routine'),
                         ),
@@ -220,6 +250,89 @@ class _JournalPageState extends State<JournalPage> with SingleTickerProviderStat
           ],
         );
       },
+    );
+  }
+
+  void _showManualLogDialog(BuildContext context, FitnessProvider fitness, dynamic workout) {
+    final bool isRoutine = workout is WorkoutPreset;
+    final List<SavedWorkout> exercises = isRoutine ? workout.exercises : [workout as SavedWorkout];
+    final Map<String, Map<String, TextEditingController>> controllers = {};
+
+    for (var ex in exercises) {
+      controllers[ex.id] = {
+        'sets': TextEditingController(text: ex.defaultSets?.toString() ?? '3'),
+        'reps': TextEditingController(text: ex.defaultReps?.toString() ?? '10'),
+      };
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Log ${isRoutine ? workout.name : (workout as SavedWorkout).name}'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: exercises.length,
+            itemBuilder: (context, index) {
+              final ex = exercises[index];
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(ex.name.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: controllers[ex.id]!['sets'],
+                            decoration: const InputDecoration(labelText: 'Sets'),
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: TextField(
+                            controller: controllers[ex.id]!['reps'],
+                            decoration: const InputDecoration(labelText: 'Reps'),
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              for (var ex in exercises) {
+                final sets = int.tryParse(controllers[ex.id]!['sets']!.text);
+                final reps = int.tryParse(controllers[ex.id]!['reps']!.text);
+                
+                fitness.addActivity(Activity(
+                  id: DateTime.now().toString(),
+                  name: ex.name,
+                  sets: sets,
+                  reps: reps,
+                  duration: const Duration(minutes: 30),
+                  timestamp: DateTime.now(),
+                ));
+              }
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Workout Logged!')),
+              );
+            },
+            child: const Text('Log Workout'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -282,6 +395,9 @@ class _JournalPageState extends State<JournalPage> with SingleTickerProviderStat
                       final isSelected = selectedExercises.any((s) => s.id == ex.id);
                       return CheckboxListTile(
                         title: Text(ex.name),
+                        subtitle: (ex.defaultSets != null && ex.defaultReps != null) 
+                          ? Text('${ex.defaultSets}x${ex.defaultReps}') 
+                          : null,
                         value: isSelected,
                         onChanged: (val) {
                           setDialogState(() {
@@ -363,13 +479,4 @@ class _JournalPageState extends State<JournalPage> with SingleTickerProviderStat
       ),
     );
   }
-}
-
-class _PresetItem {
-  final String name;
-  final String subtitle;
-  final VoidCallback onAdd;
-  final VoidCallback onDelete;
-
-  _PresetItem({required this.name, required this.subtitle, required this.onAdd, required this.onDelete});
 }

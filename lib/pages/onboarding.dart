@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/fitness_provider.dart';
 import '../models/fitness_data.dart';
+import 'legal.dart';
 
 class OnboardingPage extends StatefulWidget {
   const OnboardingPage({super.key});
@@ -13,15 +14,18 @@ class OnboardingPage extends StatefulWidget {
 class _OnboardingPageState extends State<OnboardingPage> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
+  final int _totalPages = 8; // Increased for Theme Step
 
   // Form Data
-  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _nicknameController = TextEditingController();
   final TextEditingController _heightController = TextEditingController();
   final TextEditingController _weightController = TextEditingController();
   final TextEditingController _ageController = TextEditingController();
   String _gender = 'Other';
   String _activityLevel = 'Moderate';
   final List<String> _selectedAllergies = [];
+  bool _agreedToTerms = false;
+  bool _notificationsEnabled = false;
 
   final List<String> _activityLevels = [
     'Sedentary',
@@ -43,7 +47,33 @@ class _OnboardingPageState extends State<OnboardingPage> {
   ];
 
   void _nextPage() {
-    if (_currentPage < 4) {
+    // Validation for Step 0: Legal
+    if (_currentPage == 0 && !_agreedToTerms) {
+      _showError('Please agree to the Terms and Privacy Policy to continue.');
+      return;
+    }
+
+    // Validation for Step 2: Nickname
+    if (_currentPage == 2 && _nicknameController.text.trim().isEmpty) {
+      _showError('Please enter a nickname.');
+      return;
+    }
+
+    // Validation for Step 3: Physical Stats
+    if (_currentPage == 3) {
+      if (_heightController.text.isEmpty || _weightController.text.isEmpty || _ageController.text.isEmpty) {
+        _showError('Please fill in all physical stats.');
+        return;
+      }
+      if (double.tryParse(_heightController.text) == null || 
+          double.tryParse(_weightController.text) == null || 
+          int.tryParse(_ageController.text) == null) {
+        _showError('Please enter valid numbers for stats.');
+        return;
+      }
+    }
+
+    if (_currentPage < _totalPages - 1) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
@@ -53,25 +83,30 @@ class _OnboardingPageState extends State<OnboardingPage> {
     }
   }
 
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
+  }
+
   void _completeOnboarding() {
     final provider = Provider.of<FitnessProvider>(context, listen: false);
     final profile = UserProfile(
-      name: _nameController.text,
-      height: double.tryParse(_heightController.text) ?? 0.0,
-      weight: double.tryParse(_weightController.text) ?? 0.0,
-      age: int.tryParse(_ageController.text) ?? 0,
+      name: _nicknameController.text.trim(),
+      height: double.parse(_heightController.text),
+      weight: double.parse(_weightController.text),
+      age: int.parse(_ageController.text),
       gender: _gender,
       activityLevel: _activityLevel,
       allergies: _selectedAllergies,
       onboardingCompleted: true,
+      notificationsEnabled: _notificationsEnabled,
     );
     provider.setUserProfile(profile);
   }
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -79,7 +114,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
             Padding(
               padding: const EdgeInsets.all(24.0),
               child: LinearProgressIndicator(
-                value: (_currentPage + 1) / 5,
+                value: (_currentPage + 1) / _totalPages,
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
@@ -93,10 +128,13 @@ class _OnboardingPageState extends State<OnboardingPage> {
                   });
                 },
                 children: [
-                  _buildNameStep(),
+                  _buildLegalStep(),
+                  _buildThemeStep(), // New Step before Welcome
+                  _buildWelcomeStep(),
                   _buildPhysicalStatsStep(),
                   _buildGenderActivityStep(),
                   _buildAllergiesStep(),
+                  _buildNotificationsStep(),
                   _buildSummaryStep(),
                 ],
               ),
@@ -124,7 +162,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                       padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
                     ),
-                    child: Text(_currentPage == 4 ? 'Get Started' : 'Next'),
+                    child: Text(_currentPage == _totalPages - 1 ? 'Get Started' : 'Next'),
                   ),
                 ],
               ),
@@ -152,14 +190,107 @@ class _OnboardingPageState extends State<OnboardingPage> {
     );
   }
 
-  Widget _buildNameStep() {
+  Widget _buildLegalStep() {
     return _buildStepContainer(
-      'Welcome!',
+      'Legal Information',
+      'Please review and agree to our terms to continue.',
+      Column(
+        children: [
+          const Icon(Icons.gavel, size: 80, color: Colors.grey),
+          const SizedBox(height: 20),
+          const Text(
+            'To provide you with the best health and fitness experience, we need you to accept our legal terms.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 16),
+          ),
+          const SizedBox(height: 40),
+          ListTile(
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const LegalPage(title: 'Terms of Service', content: LegalTexts.termsOfService))),
+            leading: const Icon(Icons.description),
+            title: const Text('Terms of Service', style: TextStyle(fontWeight: FontWeight.bold)),
+            trailing: const Icon(Icons.chevron_right),
+          ),
+          ListTile(
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const LegalPage(title: 'Privacy Policy', content: LegalTexts.privacyPolicy))),
+            leading: const Icon(Icons.privacy_tip),
+            title: const Text('Privacy Policy', style: TextStyle(fontWeight: FontWeight.bold)),
+            trailing: const Icon(Icons.chevron_right),
+          ),
+          const SizedBox(height: 40),
+          CheckboxListTile(
+            value: _agreedToTerms,
+            onChanged: (val) => setState(() => _agreedToTerms = val!),
+            title: const Text('I have read and agree to the Terms of Service and Privacy Policy'),
+            controlAffinity: ListTileControlAffinity.leading,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildThemeStep() {
+    return Consumer<FitnessProvider>(
+      builder: (context, fitness, child) {
+        return _buildStepContainer(
+          'Personalize',
+          'Choose your favorite color and theme mode.',
+          Column(
+            children: [
+              SwitchListTile(
+                secondary: Icon(
+                  fitness.isDarkMode ? Icons.dark_mode : Icons.light_mode,
+                  color: fitness.isDarkMode ? Colors.amber : Colors.grey,
+                ),
+                title: const Text('Dark Mode'),
+                value: fitness.isDarkMode,
+                onChanged: (bool value) => fitness.toggleTheme(),
+              ),
+              const SizedBox(height: 30),
+              const Text('Pick a highlight color:', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
+              SizedBox(
+                height: 80,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: fitness.availableColors.length,
+                  itemBuilder: (context, index) {
+                    final color = fitness.availableColors[index];
+                    final isSelected = fitness.seedColor == color;
+                    return GestureDetector(
+                      onTap: () => fitness.setSeedColor(color),
+                      child: Container(
+                        width: 50,
+                        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                          border: isSelected 
+                            ? Border.all(color: Theme.of(context).colorScheme.onSurface, width: 3)
+                            : null,
+                        ),
+                        child: isSelected 
+                          ? const Icon(Icons.check, color: Colors.white) 
+                          : null,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildWelcomeStep() {
+    return _buildStepContainer(
+      'Getting Started',
       'What should we call you?',
       TextField(
-        controller: _nameController,
+        controller: _nicknameController,
         decoration: const InputDecoration(
-          labelText: 'Full Name',
+          labelText: 'Nickname',
           border: OutlineInputBorder(),
           prefixIcon: Icon(Icons.person),
         ),
@@ -268,6 +399,27 @@ class _OnboardingPageState extends State<OnboardingPage> {
     );
   }
 
+  Widget _buildNotificationsStep() {
+    return _buildStepContainer(
+      'Stay on Track',
+      'Would you like to receive reminders for meals and workouts?',
+      Center(
+        child: Column(
+          children: [
+            const Icon(Icons.notifications_active, size: 100, color: Colors.blue),
+            const SizedBox(height: 40),
+            SwitchListTile(
+              title: const Text('Enable Notifications'),
+              subtitle: const Text('Get reminders for your scheduled activities'),
+              value: _notificationsEnabled,
+              onChanged: (val) => setState(() => _notificationsEnabled = val),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildSummaryStep() {
     return _buildStepContainer(
       'All Set!',
@@ -277,13 +429,14 @@ class _OnboardingPageState extends State<OnboardingPage> {
           padding: const EdgeInsets.all(16.0),
           child: Column(
             children: [
-              _buildSummaryRow('Name', _nameController.text),
+              _buildSummaryRow('Nickname', _nicknameController.text),
               _buildSummaryRow('Height', '${_heightController.text} cm'),
               _buildSummaryRow('Weight', '${_weightController.text} kg'),
               _buildSummaryRow('Age', _ageController.text),
               _buildSummaryRow('Gender', _gender),
               _buildSummaryRow('Activity', _activityLevel),
               _buildSummaryRow('Allergies', _selectedAllergies.isEmpty ? 'None' : _selectedAllergies.join(', ')),
+              _buildSummaryRow('Notifications', _notificationsEnabled ? 'Enabled' : 'Disabled'),
             ],
           ),
         ),

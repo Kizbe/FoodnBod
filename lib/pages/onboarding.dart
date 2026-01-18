@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/fitness_provider.dart';
 import '../models/fitness_data.dart';
+import '../services/notification_service.dart';
 import 'legal.dart';
 
 class OnboardingPage extends StatefulWidget {
@@ -14,7 +15,7 @@ class OnboardingPage extends StatefulWidget {
 class _OnboardingPageState extends State<OnboardingPage> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
-  final int _totalPages = 8; // Increased for Theme Step
+  final int _totalPages = 8;
 
   // Form Data
   final TextEditingController _nicknameController = TextEditingController();
@@ -47,28 +48,19 @@ class _OnboardingPageState extends State<OnboardingPage> {
   ];
 
   void _nextPage() {
-    // Validation for Step 0: Legal
     if (_currentPage == 0 && !_agreedToTerms) {
       _showError('Please agree to the Terms and Privacy Policy to continue.');
       return;
     }
 
-    // Validation for Step 2: Nickname
     if (_currentPage == 2 && _nicknameController.text.trim().isEmpty) {
       _showError('Please enter a nickname.');
       return;
     }
 
-    // Validation for Step 3: Physical Stats
     if (_currentPage == 3) {
       if (_heightController.text.isEmpty || _weightController.text.isEmpty || _ageController.text.isEmpty) {
         _showError('Please fill in all physical stats.');
-        return;
-      }
-      if (double.tryParse(_heightController.text) == null || 
-          double.tryParse(_weightController.text) == null || 
-          int.tryParse(_ageController.text) == null) {
-        _showError('Please enter valid numbers for stats.');
         return;
       }
     }
@@ -129,7 +121,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 },
                 children: [
                   _buildLegalStep(),
-                  _buildThemeStep(), // New Step before Welcome
+                  _buildThemeStep(),
                   _buildWelcomeStep(),
                   _buildPhysicalStatsStep(),
                   _buildGenderActivityStep(),
@@ -408,11 +400,28 @@ class _OnboardingPageState extends State<OnboardingPage> {
           children: [
             const Icon(Icons.notifications_active, size: 100, color: Colors.blue),
             const SizedBox(height: 40),
+            const Text(
+              'To send you reminders, we need your permission to access system notifications.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+            ),
+            const SizedBox(height: 20),
             SwitchListTile(
               title: const Text('Enable Notifications'),
               subtitle: const Text('Get reminders for your scheduled activities'),
               value: _notificationsEnabled,
-              onChanged: (val) => setState(() => _notificationsEnabled = val),
+              onChanged: (val) async {
+                if (val) {
+                  bool granted = await NotificationService().requestPermissions();
+                  if (granted) {
+                    setState(() => _notificationsEnabled = true);
+                  } else {
+                    _showError('Notification permission was denied.');
+                  }
+                } else {
+                  setState(() => _notificationsEnabled = false);
+                }
+              },
             ),
           ],
         ),

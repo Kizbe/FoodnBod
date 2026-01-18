@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/fitness_provider.dart';
 import '../models/fitness_data.dart';
+import '../services/notification_service.dart';
 import 'profile.dart';
 import 'legal.dart';
 
@@ -143,6 +144,21 @@ class SettingsPage extends StatelessWidget {
                   fitness.setUserProfile(updatedProfile);
                 },
               ),
+              if (profile.notificationsEnabled)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      NotificationService().showNotification(
+                        id: 999,
+                        title: 'Notification Test',
+                        body: 'This is a test notification from FoodNBod!',
+                      );
+                    },
+                    icon: const Icon(Icons.notifications_active),
+                    label: const Text('Test Notification Now'),
+                  ),
+                ),
               const Divider(),
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),

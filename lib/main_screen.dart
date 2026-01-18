@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import 'pages/home.dart';
 import 'pages/tracking.dart';
 import 'pages/journal.dart';
@@ -31,6 +33,13 @@ class _MainScreenState extends State<MainScreen> {
             index: fitness.currentTab,
             children: _pages,
           ),
+          // Mini Clock
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 10,
+            left: 16,
+            child: const MiniClock(),
+          ),
+          // Settings Button
           Positioned(
             top: MediaQuery.of(context).padding.top + 10,
             right: 16,
@@ -69,6 +78,57 @@ class _MainScreenState extends State<MainScreen> {
             label: 'Journal',
           ),
         ],
+      ),
+    );
+  }
+}
+
+class MiniClock extends StatefulWidget {
+  const MiniClock({super.key});
+
+  @override
+  State<MiniClock> createState() => _MiniClockState();
+}
+
+class _MiniClockState extends State<MiniClock> {
+  late Stream<String> _timeStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _timeStream = Stream.periodic(const Duration(seconds: 1), (_) {
+      return DateFormat('h:mm a').format(DateTime.now());
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.8),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: StreamBuilder<String>(
+        stream: _timeStream,
+        initialData: DateFormat('h:mm a').format(DateTime.now()),
+        builder: (context, snapshot) {
+          return Text(
+            snapshot.data ?? '',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          );
+        },
       ),
     );
   }

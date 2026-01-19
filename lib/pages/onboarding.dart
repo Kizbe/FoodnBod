@@ -19,7 +19,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
   // Form Data
   final TextEditingController _nicknameController = TextEditingController();
-  final TextEditingController _heightController = TextEditingController();
+  final TextEditingController _heightFeetController = TextEditingController();
+  final TextEditingController _heightInchesController = TextEditingController();
   final TextEditingController _weightController = TextEditingController();
   final TextEditingController _ageController = TextEditingController();
   String _gender = 'Other';
@@ -59,7 +60,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
     }
 
     if (_currentPage == 3) {
-      if (_heightController.text.isEmpty || _weightController.text.isEmpty || _ageController.text.isEmpty) {
+      if (_heightFeetController.text.isEmpty || _heightInchesController.text.isEmpty || _weightController.text.isEmpty || _ageController.text.isEmpty) {
         _showError('Please fill in all physical stats.');
         return;
       }
@@ -85,9 +86,10 @@ class _OnboardingPageState extends State<OnboardingPage> {
     final provider = Provider.of<FitnessProvider>(context, listen: false);
     final profile = UserProfile(
       name: _nicknameController.text.trim(),
-      height: double.parse(_heightController.text),
-      weight: double.parse(_weightController.text),
-      age: int.parse(_ageController.text),
+      heightFeet: int.tryParse(_heightFeetController.text) ?? 0,
+      heightInches: int.tryParse(_heightInchesController.text) ?? 0,
+      weight: double.tryParse(_weightController.text) ?? 0.0,
+      age: int.tryParse(_ageController.text) ?? 0,
       gender: _gender,
       activityLevel: _activityLevel,
       allergies: _selectedAllergies,
@@ -296,21 +298,38 @@ class _OnboardingPageState extends State<OnboardingPage> {
       'This helps us calculate your needs accurately.',
       Column(
         children: [
-          TextField(
-            controller: _heightController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              labelText: 'Height (cm)',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.height),
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _heightFeetController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Height (ft)',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.height),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: TextField(
+                  controller: _heightInchesController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Height (in)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 20),
           TextField(
             controller: _weightController,
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(
-              labelText: 'Weight (kg)',
+              labelText: 'Weight (lbs)',
               border: OutlineInputBorder(),
               prefixIcon: Icon(Icons.monitor_weight),
             ),
@@ -439,8 +458,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
           child: Column(
             children: [
               _buildSummaryRow('Nickname', _nicknameController.text),
-              _buildSummaryRow('Height', '${_heightController.text} cm'),
-              _buildSummaryRow('Weight', '${_weightController.text} kg'),
+              _buildSummaryRow('Height', '${_heightFeetController.text} ft ${_heightInchesController.text} in'),
+              _buildSummaryRow('Weight', '${_weightController.text} lbs'),
               _buildSummaryRow('Age', _ageController.text),
               _buildSummaryRow('Gender', _gender),
               _buildSummaryRow('Activity', _activityLevel),

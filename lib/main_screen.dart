@@ -46,7 +46,7 @@ class _MainScreenState extends State<MainScreen> {
             child: FloatingActionButton.small(
               heroTag: 'settings_btn',
               elevation: 2,
-              backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
+              backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
               child: Icon(Icons.settings, color: Theme.of(context).colorScheme.onSurfaceVariant),
               onPressed: () {
                 Navigator.push(
@@ -106,7 +106,7 @@ class _MiniClockState extends State<MiniClock> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.8),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.8),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(

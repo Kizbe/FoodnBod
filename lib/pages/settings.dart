@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/fitness_provider.dart';
 import '../models/fitness_data.dart';
 import '../services/notification_service.dart';
+import '../services/notification_schedule_manager.dart';
 import 'profile.dart';
 import 'legal.dart';
 
@@ -129,17 +130,31 @@ class SettingsPage extends StatelessWidget {
                 title: const Text('Notifications'),
                 subtitle: const Text('Receive reminders for activities'),
                 value: profile.notificationsEnabled,
-                onChanged: (bool value) {
+                onChanged: (bool value) async {
+                  bool shouldEnable = value;
+                  if (value) {
+                    final granted = await NotificationService().requestPermissions();
+                    if (!granted) {
+                      shouldEnable = false;
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Notification permissions are required.')),
+                        );
+                      }
+                    }
+                  }
+
                   final updatedProfile = UserProfile(
                     name: profile.name,
-                    height: profile.height,
+                    heightFeet: profile.heightFeet,
+                    heightInches: profile.heightInches,
                     weight: profile.weight,
                     age: profile.age,
                     gender: profile.gender,
                     activityLevel: profile.activityLevel,
                     allergies: profile.allergies,
                     onboardingCompleted: profile.onboardingCompleted,
-                    notificationsEnabled: value,
+                    notificationsEnabled: shouldEnable,
                   );
                   fitness.setUserProfile(updatedProfile);
                 },
@@ -149,10 +164,13 @@ class SettingsPage extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      NotificationService().showNotification(
-                        id: 999,
-                        title: 'Notification Test',
-                        body: 'This is a test notification from FoodNBod!',
+                      final scheduleManager = NotificationScheduleManager(NotificationService());
+                      final content = scheduleManager.getMealReminder('Test');
+                      NotificationService().scheduleDailyNotification(
+                        999,
+                        content.title,
+                        content.body,
+                        TimeOfDay.now(),
                       );
                     },
                     icon: const Icon(Icons.notifications_active),

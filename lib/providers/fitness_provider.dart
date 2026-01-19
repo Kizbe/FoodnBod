@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/fitness_data.dart';
 import '../services/notification_service.dart';
+import '../services/notification_schedule_manager.dart';
 
 class FitnessProvider with ChangeNotifier {
   UserProfile _userProfile = UserProfile.empty();
@@ -66,7 +67,7 @@ class FitnessProvider with ChangeNotifier {
   Future<void> clearAllData() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
-    await NotificationService().cancelAll();
+    await NotificationService().cancelAllNotifications();
     
     _userProfile = UserProfile.empty();
     _activities = [];
@@ -85,50 +86,34 @@ class FitnessProvider with ChangeNotifier {
   }
 
   void _syncAllNotifications() async {
-    await NotificationService().cancelAll();
+    final notificationService = NotificationService();
+    final scheduleManager = NotificationScheduleManager(notificationService);
+    
+    await notificationService.cancelAllNotifications();
     if (!_userProfile.notificationsEnabled) return;
 
-    final now = DateTime.now();
+    // 1. Schedule Daily Reminders (Check-ins)
+    await scheduleManager.scheduleDailyReminders();
 
-    // 1. Schedule Meal Times
+    // 2. Schedule Meal Times
     for (int i = 0; i < _mealTimes.length; i++) {
       final meal = _mealTimes[i];
-      var scheduledDate = DateTime(now.year, now.month, now.day, meal.time.hour, meal.time.minute);
-      if (scheduledDate.isBefore(now)) {
-        scheduledDate = scheduledDate.add(const Duration(days: 1));
-      }
-      
-      await NotificationService().scheduleNotification(
-        id: 100 + i,
-        title: 'Meal Reminder',
-        body: 'It\'s time for your ${meal.name}!',
-        scheduledDate: scheduledDate,
-      );
+      await scheduleManager.scheduleMealReminders(meal.name, meal.time, i);
     }
 
-    // 2. Schedule Individual Scheduled Workouts
+    // 3. Schedule Individual Scheduled Workouts
     for (int i = 0; i < _savedWorkouts.length; i++) {
       final w = _savedWorkouts[i];
-      if (w.scheduledTime != null && w.scheduledTime!.isAfter(now)) {
-        await NotificationService().scheduleNotification(
-          id: 200 + i,
-          title: 'Workout Reminder',
-          body: 'Time to start your workout: ${w.name}',
-          scheduledDate: w.scheduledTime!,
-        );
+      if (w.scheduledTime != null) {
+        await scheduleManager.scheduleWorkoutReminder(w.name, w.scheduledTime!, i);
       }
     }
 
-    // 3. Schedule Workout Routines
+    // 4. Schedule Workout Routines
     for (int i = 0; i < _workoutPresets.length; i++) {
       final p = _workoutPresets[i];
-      if (p.scheduledTime != null && p.scheduledTime!.isAfter(now)) {
-        await NotificationService().scheduleNotification(
-          id: 300 + i,
-          title: 'Routine Reminder',
-          body: 'Time to start your routine: ${p.name}',
-          scheduledDate: p.scheduledTime!,
-        );
+      if (p.scheduledTime != null) {
+        await scheduleManager.scheduleWorkoutReminder(p.name, p.scheduledTime!, i, isRoutine: true);
       }
     }
   }

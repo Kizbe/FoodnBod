@@ -1,28 +1,33 @@
-import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
-import 'package:timezone/data/latest.dart' as tz_data;
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
+  static final FlutterLocalNotificationsPlugin _notificationsPlugin =
+      FlutterLocalNotificationsPlugin();
 
   Future<void> init() async {
-    tz_data.initializeTimeZones();
+    print('[NotificationService] Initializing...');
+    tz.initializeTimeZones();
     
-    // Using a simpler approach for local time until the plugin build issue is resolved
+    // Set default timezone to UTC if not otherwise specified. 
+    // Note: zonedSchedule with absoluteTime handles local conversion if scheduledDate is a local TZDateTime.
     tz.setLocalLocation(tz.getLocation('UTC')); 
-    
+
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
-    
-    const DarwinInitializationSettings initializationSettingsIOS = DarwinInitializationSettings(
-      requestAlertPermission: false,
-      requestBadgePermission: false,
-      requestSoundPermission: false,
+
+    const DarwinInitializationSettings initializationSettingsIOS =
+        DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
     );
 
     const InitializationSettings initializationSettings = InitializationSettings(
@@ -30,66 +35,72 @@ class NotificationService {
       iOS: initializationSettingsIOS,
     );
 
-    await _notificationsPlugin.initialize(
-      initializationSettings,
-    );
+    await _notificationsPlugin.initialize(initializationSettings);
+    print('[NotificationService] Plugin initialized.');
   }
 
   Future<bool> requestPermissions() async {
-    if (Platform.isIOS) {
-      return await _notificationsPlugin
-              .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
-              ?.requestPermissions(
-                alert: true,
-                badge: true,
-                sound: true,
-              ) ??
-          false;
-    } else if (Platform.isAndroid) {
-      final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
-          _notificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-      final bool? granted = await androidImplementation?.requestNotificationsPermission();
-      return granted ?? false;
-    }
-    return false;
+    print('[NotificationService] Requesting permissions...');
+    final android = _notificationsPlugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    
+    final notificationPermissionGranted = await android?.requestNotificationsPermission() ?? false;
+    print('[NotificationService] Notification permission: $notificationPermissionGranted');
+
+    final alarmPermissionGranted = await Permission.scheduleExactAlarm.request().isGranted;
+    print('[NotificationService] Exact alarm permission: $alarmPermissionGranted');
+
+    return notificationPermissionGranted && alarmPermissionGranted;
   }
 
-  Future<void> showNotification({
-    required int id,
-    required String title,
-    required String body,
-  }) async {
-    const AndroidNotificationDetails androidPlatformChannelSpecifics =
-        AndroidNotificationDetails(
-      'fitness_channel_id',
-      'Fitness Reminders',
-      channelDescription: 'Notifications for meals and scheduled workouts',
-      importance: Importance.max,
-      priority: Priority.high,
-      showWhen: true,
-    );
-    const NotificationDetails platformChannelSpecifics =
-        NotificationDetails(android: androidPlatformChannelSpecifics, iOS: DarwinNotificationDetails());
-    
-    await _notificationsPlugin.show(
+  /// Schedules a recurring daily notification.
+  Future<void> scheduleDailyNotification(
+    int id,
+    String title,
+    String body,
+    TimeOfDay time,
+  ) async {
+    final tz.TZDateTime scheduledDate = _nextInstanceOfTime(time);
+
+    print('[NotificationService] Scheduling recurring notification id: $id at $scheduledDate');
+
+    await _notificationsPlugin.zonedSchedule(
       id,
       title,
       body,
-      platformChannelSpecifics,
+      scheduledDate,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'daily_reminders',
+          'Daily Reminders',
+          channelDescription: 'Daily reminders for check-ins.',
+          importance: Importance.max,
+          priority: Priority.high,
+        ),
+        iOS: DarwinNotificationDetails(),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: DateTimeComponents.time,
     );
   }
 
-  Future<void> scheduleNotification({
-    required int id,
-    required String title,
-    required String body,
-    required DateTime scheduledDate,
-  }) async {
+  /// Schedules a single notification at a specific DateTime.
+  Future<void> scheduleSingleNotification(
+    int id,
+    String title,
+    String body,
+    DateTime scheduledDate,
+  ) async {
     final now = DateTime.now();
-    if (scheduledDate.isBefore(now)) return;
+    if (scheduledDate.isBefore(now)) {
+      print('[NotificationService] Skipping notification $id as the date is in the past: $scheduledDate');
+      return;
+    }
 
-    // Convert DateTime to TZDateTime manually
-    final tzDate = tz.TZDateTime.from(scheduledDate, tz.local);
+    final tz.TZDateTime tzDate = tz.TZDateTime.from(scheduledDate, tz.local);
+    print('[NotificationService] Scheduling single notification id: $id at $tzDate');
 
     await _notificationsPlugin.zonedSchedule(
       id,
@@ -98,25 +109,39 @@ class NotificationService {
       tzDate,
       const NotificationDetails(
         android: AndroidNotificationDetails(
-          'fitness_channel_id',
-          'Fitness Reminders',
-          channelDescription: 'Notifications for meals and scheduled workouts',
+          'activity_reminders',
+          'Activity Reminders',
+          channelDescription: 'Reminders for workouts and meals.',
           importance: Importance.max,
           priority: Priority.high,
-          showWhen: true,
         ),
-        iOS: DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-        ),
+        iOS: DarwinNotificationDetails(),
       ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
     );
   }
 
-  Future<void> cancelAll() async {
+  tz.TZDateTime _nextInstanceOfTime(TimeOfDay time) {
+    final DateTime now = DateTime.now();
+    DateTime scheduled = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      time.hour,
+      time.minute,
+    );
+
+    if (scheduled.isBefore(now)) {
+      scheduled = scheduled.add(const Duration(days: 1));
+    }
+
+    return tz.TZDateTime.from(scheduled, tz.local);
+  }
+
+  Future<void> cancelAllNotifications() async {
+    print('[NotificationService] Cancelling all notifications...');
     await _notificationsPlugin.cancelAll();
   }
 }

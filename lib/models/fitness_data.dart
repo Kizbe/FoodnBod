@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 
 class UserProfile {
   final String name;
-  final double height; // in cm
-  final double weight; // in kg
+  final int heightFeet;
+  final int heightInches;
+  final double weight; // in lbs
   final int age;
   final String gender;
   final String activityLevel;
@@ -13,7 +14,8 @@ class UserProfile {
 
   UserProfile({
     required this.name,
-    required this.height,
+    required this.heightFeet,
+    required this.heightInches,
     required this.weight,
     required this.age,
     required this.gender,
@@ -23,10 +25,13 @@ class UserProfile {
     this.notificationsEnabled = false,
   });
 
+  double get totalHeightInches => (heightFeet * 12) + heightInches.toDouble();
+
   Map<String, dynamic> toMap() {
     return {
       'name': name,
-      'height': height,
+      'heightFeet': heightFeet,
+      'heightInches': heightInches,
       'weight': weight,
       'age': age,
       'gender': gender,
@@ -40,7 +45,8 @@ class UserProfile {
   factory UserProfile.fromMap(Map<String, dynamic> map) {
     return UserProfile(
       name: map['name'] ?? '',
-      height: (map['height'] ?? 0.0).toDouble(),
+      heightFeet: map['heightFeet'] ?? 0,
+      heightInches: map['heightInches'] ?? 0,
       weight: (map['weight'] ?? 0.0).toDouble(),
       age: map['age'] ?? 0,
       gender: map['gender'] ?? '',
@@ -54,7 +60,8 @@ class UserProfile {
   factory UserProfile.empty() {
     return UserProfile(
       name: '',
-      height: 0.0,
+      heightFeet: 0,
+      heightInches: 0,
       weight: 0.0,
       age: 0,
       gender: '',

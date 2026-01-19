@@ -12,7 +12,8 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   late TextEditingController _nameController;
-  late TextEditingController _heightController;
+  late TextEditingController _heightFeetController;
+  late TextEditingController _heightInchesController;
   late TextEditingController _weightController;
   late TextEditingController _ageController;
   late String _gender;
@@ -43,7 +44,8 @@ class _ProfilePageState extends State<ProfilePage> {
     super.initState();
     final profile = Provider.of<FitnessProvider>(context, listen: false).userProfile;
     _nameController = TextEditingController(text: profile.name);
-    _heightController = TextEditingController(text: profile.height.toString());
+    _heightFeetController = TextEditingController(text: profile.heightFeet.toString());
+    _heightInchesController = TextEditingController(text: profile.heightInches.toString());
     _weightController = TextEditingController(text: profile.weight.toString());
     _ageController = TextEditingController(text: profile.age.toString());
     _gender = profile.gender.isEmpty ? 'Other' : profile.gender;
@@ -55,7 +57,8 @@ class _ProfilePageState extends State<ProfilePage> {
     final provider = Provider.of<FitnessProvider>(context, listen: false);
     final updatedProfile = UserProfile(
       name: _nameController.text,
-      height: double.tryParse(_heightController.text) ?? 0.0,
+      heightFeet: int.tryParse(_heightFeetController.text) ?? 0,
+      heightInches: int.tryParse(_heightInchesController.text) ?? 0,
       weight: double.tryParse(_weightController.text) ?? 0.0,
       age: int.tryParse(_ageController.text) ?? 0,
       gender: _gender,
@@ -90,20 +93,49 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
             const SizedBox(height: 20),
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: TextField(
-                    controller: _heightController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Height (cm)', border: OutlineInputBorder()),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Height', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _heightFeetController,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(labelText: 'ft', border: OutlineInputBorder()),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: _heightInchesController,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(labelText: 'in', border: OutlineInputBorder()),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: TextField(
-                    controller: _weightController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Weight (kg)', border: OutlineInputBorder()),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Weight', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      const SizedBox(height: 4),
+                      TextField(
+                        controller: _weightController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'lbs', border: OutlineInputBorder()),
+                      ),
+                    ],
                   ),
                 ),
               ],

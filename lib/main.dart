@@ -6,9 +6,13 @@ import 'pages/onboarding.dart';
 import 'services/notification_service.dart';
 
 void main() async {
+  print('[Main] Initializing app...');
   WidgetsFlutterBinding.ensureInitialized();
+  
+  print('[Main] Initializing NotificationService...');
   await NotificationService().init();
   
+  print('[Main] Running app...');
   runApp(
     MultiProvider(
       providers: [
